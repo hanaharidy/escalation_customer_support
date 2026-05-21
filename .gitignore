@@ -1,0 +1,24 @@
+# Virtual environment
+venv/
+
+# Environment variables (contains real API keys)
+.env
+
+# Database
+data/support.db
+
+# ChromaDB data
+chroma_data/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Mac system files
+.DS_Store
+
+# Test files
+test_graph.py
