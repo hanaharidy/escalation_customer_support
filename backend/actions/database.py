@@ -1,183 +1,129 @@
-"""
-actions/database.py — SQLite database setup and seed data.
-
-Creates a real database with:
-- customers table
-- orders table
-- order_items table
-
-Runs once on startup, seeds with realistic demo data.
-"""
-
 import sqlite3
 import os
+import json
 from datetime import datetime, timedelta
 from typing import Optional
 
-DB_PATH = "./data/support.db"
+DB_PATH        = "./data/support.db"
+SEED_DATA_PATH = "./data/seed_data.json"
 
 
 def get_connection() -> sqlite3.Connection:
-    """Returns a SQLite connection with row factory for dict-like access."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
+def _resolve_date(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    today = datetime.now()
+    mapping = {
+        "DAYS_AGO_1":   today - timedelta(days=1),
+        "DAYS_AGO_2":   today - timedelta(days=2),
+        "DAYS_AGO_3":   today - timedelta(days=3),
+        "DAYS_AGO_4":   today - timedelta(days=4),
+        "DAYS_AGO_5":   today - timedelta(days=5),
+        "DAYS_AGO_8":   today - timedelta(days=8),
+        "DAYS_AGO_10":  today - timedelta(days=10),
+        "DAYS_AGO_13":  today - timedelta(days=13),
+        "DAYS_AGO_15":  today - timedelta(days=15),
+        "DAYS_AHEAD_2": today + timedelta(days=2),
+        "DAYS_AHEAD_3": today + timedelta(days=3),
+    }
+    resolved = mapping.get(value)
+    return resolved.strftime("%Y-%m-%d") if resolved else value
+
+
 def init_database():
-    """
-    Creates tables and seeds demo data if DB doesn't exist yet.
-    Called once on server startup.
-    """
-    # Create data directory if needed
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
-    # If DB already exists and has data, skip
     if os.path.exists(DB_PATH):
         conn = get_connection()
-        count = conn.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'").fetchone()[0]
+        count = conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table'"
+        ).fetchone()[0]
         conn.close()
         if count > 0:
             print("[Database] Already initialized. Skipping.")
             return
 
+    if not os.path.exists(SEED_DATA_PATH):
+        print(f"[Database] Seed file not found: {SEED_DATA_PATH}")
+        return
+
+    with open(SEED_DATA_PATH, "r") as f:
+        seed = json.load(f)
+
     conn = get_connection()
     cursor = conn.cursor()
 
-    # ── Create Tables ─────────────────────────────────────────────────────
-
     cursor.executescript("""
         CREATE TABLE IF NOT EXISTS customers (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            name          TEXT NOT NULL,
-            email         TEXT UNIQUE NOT NULL,
-            phone         TEXT,
-            created_at    TEXT DEFAULT CURRENT_TIMESTAMP
+            id         INTEGER PRIMARY KEY,
+            name       TEXT NOT NULL,
+            email      TEXT UNIQUE NOT NULL,
+            phone      TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS orders (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            order_id        TEXT UNIQUE NOT NULL,
-            customer_id     INTEGER REFERENCES customers(id),
-            status          TEXT NOT NULL,
-            total           REAL NOT NULL,
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id         TEXT UNIQUE NOT NULL,
+            customer_id      INTEGER REFERENCES customers(id),
+            status           TEXT NOT NULL,
+            total            REAL NOT NULL,
             shipping_address TEXT,
-            carrier         TEXT,
-            tracking_number TEXT,
-            order_date      TEXT,
-            ship_date       TEXT,
-            delivery_date   TEXT,
-            created_at      TEXT DEFAULT CURRENT_TIMESTAMP
+            carrier          TEXT,
+            tracking_number  TEXT,
+            order_date       TEXT,
+            ship_date        TEXT,
+            delivery_date    TEXT,
+            created_at       TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS order_items (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            order_id    TEXT REFERENCES orders(order_id),
-            product     TEXT NOT NULL,
-            quantity    INTEGER NOT NULL,
-            price       REAL NOT NULL
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id TEXT REFERENCES orders(order_id),
+            product  TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            price    REAL NOT NULL
         );
     """)
 
-    # ── Seed Demo Data ────────────────────────────────────────────────────
+    for c in seed["customers"]:
+        cursor.execute(
+            "INSERT OR IGNORE INTO customers (id, name, email, phone) VALUES (?,?,?,?)",
+            (c["id"], c["name"], c["email"], c["phone"])
+        )
 
-    today = datetime.now()
+    for o in seed["orders"]:
+        cursor.execute(
+            """INSERT OR IGNORE INTO orders
+               (order_id, customer_id, status, total, shipping_address,
+                carrier, tracking_number, order_date, ship_date, delivery_date)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (
+                o["order_id"], o["customer_id"], o["status"], o["total"],
+                o["shipping_address"], o["carrier"], o["tracking_number"],
+                _resolve_date(o["order_date"]),
+                _resolve_date(o["ship_date"]),
+                _resolve_date(o["delivery_date"]),
+            )
+        )
 
-    customers = [
-        (1, "Ahmed Hassan",   "ahmed@example.com",   "+20-100-123-4567"),
-        (2, "Sara Mohamed",   "sara@example.com",    "+20-101-234-5678"),
-        (3, "Omar Khalil",    "omar@example.com",    "+20-102-345-6789"),
-        (4, "Nour Ibrahim",   "nour@example.com",    "+20-103-456-7890"),
-        (5, "Hana Tarek",     "hana@example.com",    "+20-104-567-8901"),
-    ]
-
-    cursor.executemany(
-        "INSERT OR IGNORE INTO customers (id, name, email, phone) VALUES (?,?,?,?)",
-        customers
-    )
-
-    orders = [
-        # (order_id, customer_id, status, total, address, carrier, tracking, order_date, ship_date, delivery_date)
-        (
-            "ORD-123", 5, "shipped", 79.99,
-            "123 Main St, Cairo, Egypt",
-            "FedEx", "FX480248927",
-            (today - timedelta(days=5)).strftime("%Y-%m-%d"),
-            (today - timedelta(days=3)).strftime("%Y-%m-%d"),
-            (today + timedelta(days=2)).strftime("%Y-%m-%d"),
-        ),
-        (
-            "ORD-456", 5, "processing", 149.99,
-            "123 Main St, Cairo, Egypt",
-            None, None,
-            (today - timedelta(days=1)).strftime("%Y-%m-%d"),
-            None, None,
-        ),
-        (
-            "ORD-789", 5, "delivered", 49.99,
-            "123 Main St, Cairo, Egypt",
-            "UPS", "UP123456789",
-            (today - timedelta(days=10)).strftime("%Y-%m-%d"),
-            (today - timedelta(days=8)).strftime("%Y-%m-%d"),
-            (today - timedelta(days=5)).strftime("%Y-%m-%d"),
-        ),
-        (
-            "ORD-999", 5, "cancelled", 29.99,
-            "123 Main St, Cairo, Egypt",
-            None, None,
-            (today - timedelta(days=2)).strftime("%Y-%m-%d"),
-            None, None,
-        ),
-        (
-            "ORD-111", 1, "shipped", 199.99,
-            "456 Nile St, Alexandria, Egypt",
-            "DHL", "DH987654321",
-            (today - timedelta(days=4)).strftime("%Y-%m-%d"),
-            (today - timedelta(days=2)).strftime("%Y-%m-%d"),
-            (today + timedelta(days=3)).strftime("%Y-%m-%d"),
-        ),
-        (
-            "ORD-222", 2, "delivered", 89.99,
-            "789 Pyramids Ave, Giza, Egypt",
-            "FedEx", "FX111222333",
-            (today - timedelta(days=15)).strftime("%Y-%m-%d"),
-            (today - timedelta(days=13)).strftime("%Y-%m-%d"),
-            (today - timedelta(days=10)).strftime("%Y-%m-%d"),
-        ),
-    ]
-
-    cursor.executemany(
-        """INSERT OR IGNORE INTO orders
-           (order_id, customer_id, status, total, shipping_address,
-            carrier, tracking_number, order_date, ship_date, delivery_date)
-           VALUES (?,?,?,?,?,?,?,?,?,?)""",
-        orders
-    )
-
-    items = [
-        ("ORD-123", "Wireless Headphones",  1, 79.99),
-        ("ORD-456", "Laptop Stand",         1, 49.99),
-        ("ORD-456", "USB-C Hub",            2, 50.00),
-        ("ORD-789", "Phone Case",           1, 49.99),
-        ("ORD-999", "Screen Protector",     2, 14.99),
-        ("ORD-111", "Mechanical Keyboard",  1, 199.99),
-        ("ORD-222", "Wireless Mouse",       1, 89.99),
-    ]
-
-    cursor.executemany(
-        "INSERT OR IGNORE INTO order_items (order_id, product, quantity, price) VALUES (?,?,?,?)",
-        items
-    )
+    for i in seed["order_items"]:
+        cursor.execute(
+            "INSERT OR IGNORE INTO order_items (order_id, product, quantity, price) VALUES (?,?,?,?)",
+            (i["order_id"], i["product"], i["quantity"], i["price"])
+        )
 
     conn.commit()
     conn.close()
-    print("[Database] Initialized with demo data.")
+    print("[Database] Initialized from seed_data.json.")
 
-
-# ── Query Functions ───────────────────────────────────────────────────────────
 
 def get_order(order_id: str) -> Optional[dict]:
-    """Fetches full order details including items."""
     conn = get_connection()
 
     order = conn.execute(
@@ -200,16 +146,16 @@ def get_order(order_id: str) -> Optional[dict]:
     conn.close()
 
     return {
-        "order_id":        order["order_id"],
-        "status":          order["status"],
-        "total":           order["total"],
-        "customer_name":   order["customer_name"],
+        "order_id":         order["order_id"],
+        "status":           order["status"],
+        "total":            order["total"],
+        "customer_name":    order["customer_name"],
         "shipping_address": order["shipping_address"],
-        "carrier":         order["carrier"],
-        "tracking_number": order["tracking_number"],
-        "order_date":      order["order_date"],
-        "ship_date":       order["ship_date"],
-        "delivery_date":   order["delivery_date"],
+        "carrier":          order["carrier"],
+        "tracking_number":  order["tracking_number"],
+        "order_date":       order["order_date"],
+        "ship_date":        order["ship_date"],
+        "delivery_date":    order["delivery_date"],
         "items": [
             {"product": i["product"], "quantity": i["quantity"], "price": i["price"]}
             for i in items
@@ -218,7 +164,6 @@ def get_order(order_id: str) -> Optional[dict]:
 
 
 def update_order_status(order_id: str, new_status: str) -> bool:
-    """Updates order status. Returns True if updated."""
     conn = get_connection()
     cursor = conn.execute(
         "UPDATE orders SET status = ? WHERE order_id = ?",

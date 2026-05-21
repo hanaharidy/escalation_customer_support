@@ -1,15 +1,15 @@
 """
-graph/workflow.py — LangGraph workflow assembly.
+graph/workflow.py - LangGraph workflow assembly.
 
-Correct flow per supervisor spec:
-  1. Conversation Manager  — classify intent
-  2. Knowledge Base Agent  — search for answer
-  3. Action Agent          — handle transactional requests
-  4. Sentiment Analyzer    — monitor tone (after attempt)
-  5. Escalation Decider    — escalate ONLY if genuinely needed
-  6. Learning Agent        — log resolution
-
-Escalation is the LAST resort, not the first response.
+Flow:
+  conversation_manager
+    ├── intent == "escalate_attempted" → END directly (response already set)
+    └── everything else →
+        knowledge_base_agent
+        → action_agent
+        → sentiment_analyzer
+        → escalation_decider
+        → escalation_handler OR learning_agent
 """
 
 from langgraph.graph import StateGraph, END
@@ -23,21 +23,16 @@ from backend.agents.escalation_decider import escalation_decider_node
 from backend.agents.learning_agent import learning_agent_node
 
 
-# ── Escalation Handler ────────────────────────────────────────────────────────
-
 def escalation_handler_node(state: SupportState) -> dict:
-    """Composes the human-handoff message shown to the customer."""
-    reason = state.get("escalation_reason", "")
-    ticket_id = state.get("escalation_ticket_id", "")
+    reason        = state.get("escalation_reason", "")
+    ticket_id     = state.get("escalation_ticket_id", "")
     customer_name = state.get("customer_name", "there")
 
     reason_messages = {
-        "high_frustration":           "I can see this has been a very frustrating experience, and I sincerely apologize we couldn't resolve it for you.",
-        "persistent_negative":        "I understand we haven't been able to resolve your issue, and I'm sorry for the inconvenience.",
-        "repeated_failed_attempts":   "I've tried my best but wasn't able to fully resolve your issue through our automated system.",
-        "user_requested_human":       "Of course! I'll connect you with a human agent right away.",
-        "angry_complaint":            "I'm truly sorry about this experience. You deserve much better service than this.",
-        "low_kb_confidence":          "Your question requires specialist knowledge that's beyond what I can confidently answer.",
+        "user_requested_human":           "Of course! I'll connect you with a human agent right away.",
+        "all_resolution_levels_exhausted": "I've done my best but wasn't able to fully resolve your issue. Let me connect you with a specialist.",
+        "persistent_high_frustration":    "I can see this has been very frustrating. I sincerely apologize and am connecting you with a human agent now.",
+        "unresolved_angry_complaint":     "I'm truly sorry we haven't been able to resolve this. You deserve better service.",
     }
 
     reason_msg = reason_messages.get(reason, "Let me connect you with a specialist who can better help you.")
@@ -46,13 +41,21 @@ def escalation_handler_node(state: SupportState) -> dict:
         f"{reason_msg}\n\n"
         f"A human support agent will have the full context of our conversation. "
         f"Your support ticket **{ticket_id}** has been created.\n\n"
-        f"⏱ Expected wait time: **2–5 minutes**. Thank you for your patience, {customer_name}."
+        f"Expected wait time: **2-5 minutes**. Thank you for your patience, {customer_name}."
     )
 
     return {"response": response}
 
 
-# ── Conditional Edge: after escalation check ─────────────────────────────────
+def route_after_conversation_manager(state: SupportState) -> str:
+    """
+    If bot already set a response (escalate_attempted), go straight to END.
+    Otherwise continue the full pipeline.
+    """
+    if state.get("intent") == "escalate_attempted":
+        return "end_early"
+    return "knowledge_base_agent"
+
 
 def route_after_escalation_check(state: SupportState) -> str:
     if state.get("should_escalate", False):
@@ -60,12 +63,9 @@ def route_after_escalation_check(state: SupportState) -> str:
     return "learning_agent"
 
 
-# ── Graph Assembly ────────────────────────────────────────────────────────────
-
 def build_graph() -> StateGraph:
     graph = StateGraph(SupportState)
 
-    # Add nodes
     graph.add_node("conversation_manager",  conversation_manager_node)
     graph.add_node("knowledge_base_agent",  knowledge_base_agent_node)
     graph.add_node("action_agent",          action_agent_node)
@@ -74,22 +74,22 @@ def build_graph() -> StateGraph:
     graph.add_node("escalation_handler",    escalation_handler_node)
     graph.add_node("learning_agent",        learning_agent_node)
 
-    # Entry point
     graph.set_entry_point("conversation_manager")
 
-    # Step 1 → 2: intent classified → search KB
-    graph.add_edge("conversation_manager", "knowledge_base_agent")
+    # After conversation manager — check if we need to short-circuit
+    graph.add_conditional_edges(
+        "conversation_manager",
+        route_after_conversation_manager,
+        {
+            "end_early":           END,
+            "knowledge_base_agent": "knowledge_base_agent",
+        },
+    )
 
-    # Step 2 → 3: KB answer ready → run action if needed
     graph.add_edge("knowledge_base_agent", "action_agent")
+    graph.add_edge("action_agent",         "sentiment_analyzer")
+    graph.add_edge("sentiment_analyzer",   "escalation_decider")
 
-    # Step 3 → 4: after action attempt → analyze sentiment
-    graph.add_edge("action_agent", "sentiment_analyzer")
-
-    # Step 4 → 5: sentiment scored → decide escalation
-    graph.add_edge("sentiment_analyzer", "escalation_decider")
-
-    # Step 5: escalate or finish normally
     graph.add_conditional_edges(
         "escalation_decider",
         route_after_escalation_check,
@@ -99,16 +99,14 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # Escalation ends immediately
     graph.add_edge("escalation_handler", END)
-
-    # Normal path ends after learning
-    graph.add_edge("learning_agent", END)
+    graph.add_edge("learning_agent",     END)
 
     return graph.compile()
 
 
 _graph = None
+
 
 def get_graph():
     global _graph

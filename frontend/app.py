@@ -152,6 +152,11 @@ with tab_chat:
                         sources = ", ".join(meta["kb_sources"])
                         cols[3].caption(f"🗂 {sources}")
 
+                    level = meta.get("resolution_level", 1)
+                    level_labels = {1: "📖 KB", 2: "⚡ Action", 3: "❓ Clarifying", 4: "🔄 Alternatives", 5: "🆘 Exhausted"}
+                    if level > 1:
+                        st.caption(f"Resolution Level: {level_labels.get(level, str(level))}")
+
                     if meta.get("action_taken") and meta["action_taken"] not in ("", "requested_order_id"):
                         st.caption(f"⚡ Action taken: `{meta['action_taken']}`")
 
@@ -182,7 +187,8 @@ with tab_chat:
                     "sentiment_score": response.get("sentiment_score", 0.0),
                     "kb_confidence":   response.get("kb_confidence", 0.0),
                     "kb_sources":      response.get("kb_sources", []),
-                    "action_taken":    response.get("action_taken", ""),
+                    "action_taken":       response.get("action_taken", ""),
+                    "resolution_level":   response.get("resolution_level", 1),
                 },
             })
 

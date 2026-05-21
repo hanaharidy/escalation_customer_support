@@ -1,7 +1,7 @@
 # Virtual environment
 venv/
 
-# Environment variables (contains real API keys)
+# Environment variables
 .env
 
 # Database
@@ -22,3 +22,11 @@ __pycache__/
 
 # Test files
 test_graph.py
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log

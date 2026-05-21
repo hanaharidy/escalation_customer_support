@@ -1,0 +1,56 @@
+{
+  "customers": [
+    {"id": 1, "name": "Ahmed Hassan",  "email": "ahmed@example.com", "phone": "+20-100-123-4567"},
+    {"id": 2, "name": "Sara Mohamed",  "email": "sara@example.com",  "phone": "+20-101-234-5678"},
+    {"id": 3, "name": "Omar Khalil",   "email": "omar@example.com",  "phone": "+20-102-345-6789"},
+    {"id": 4, "name": "Nour Ibrahim",  "email": "nour@example.com",  "phone": "+20-103-456-7890"},
+    {"id": 5, "name": "Hana Tarek",    "email": "hana@example.com",  "phone": "+20-104-567-8901"}
+  ],
+  "orders": [
+    {
+      "order_id": "ORD-123", "customer_id": 5, "status": "shipped",    "total": 79.99,
+      "shipping_address": "123 Main St, Cairo, Egypt",
+      "carrier": "FedEx", "tracking_number": "FX480248927",
+      "order_date": "DAYS_AGO_5", "ship_date": "DAYS_AGO_3", "delivery_date": "DAYS_AHEAD_2"
+    },
+    {
+      "order_id": "ORD-456", "customer_id": 5, "status": "processing", "total": 149.99,
+      "shipping_address": "123 Main St, Cairo, Egypt",
+      "carrier": null, "tracking_number": null,
+      "order_date": "DAYS_AGO_1", "ship_date": null, "delivery_date": null
+    },
+    {
+      "order_id": "ORD-789", "customer_id": 5, "status": "delivered",  "total": 49.99,
+      "shipping_address": "123 Main St, Cairo, Egypt",
+      "carrier": "UPS", "tracking_number": "UP123456789",
+      "order_date": "DAYS_AGO_10", "ship_date": "DAYS_AGO_8", "delivery_date": "DAYS_AGO_5"
+    },
+    {
+      "order_id": "ORD-999", "customer_id": 5, "status": "cancelled",  "total": 29.99,
+      "shipping_address": "123 Main St, Cairo, Egypt",
+      "carrier": null, "tracking_number": null,
+      "order_date": "DAYS_AGO_2", "ship_date": null, "delivery_date": null
+    },
+    {
+      "order_id": "ORD-111", "customer_id": 1, "status": "shipped",    "total": 199.99,
+      "shipping_address": "456 Nile St, Alexandria, Egypt",
+      "carrier": "DHL", "tracking_number": "DH987654321",
+      "order_date": "DAYS_AGO_4", "ship_date": "DAYS_AGO_2", "delivery_date": "DAYS_AHEAD_3"
+    },
+    {
+      "order_id": "ORD-222", "customer_id": 2, "status": "delivered",  "total": 89.99,
+      "shipping_address": "789 Pyramids Ave, Giza, Egypt",
+      "carrier": "FedEx", "tracking_number": "FX111222333",
+      "order_date": "DAYS_AGO_15", "ship_date": "DAYS_AGO_13", "delivery_date": "DAYS_AGO_10"
+    }
+  ],
+  "order_items": [
+    {"order_id": "ORD-123", "product": "Wireless Headphones",  "quantity": 1, "price": 79.99},
+    {"order_id": "ORD-456", "product": "Laptop Stand",         "quantity": 1, "price": 49.99},
+    {"order_id": "ORD-456", "product": "USB-C Hub",            "quantity": 2, "price": 50.00},
+    {"order_id": "ORD-789", "product": "Phone Case",           "quantity": 1, "price": 49.99},
+    {"order_id": "ORD-999", "product": "Screen Protector",     "quantity": 2, "price": 14.99},
+    {"order_id": "ORD-111", "product": "Mechanical Keyboard",  "quantity": 1, "price": 199.99},
+    {"order_id": "ORD-222", "product": "Wireless Mouse",       "quantity": 1, "price": 89.99}
+  ]
+}

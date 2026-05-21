@@ -1,5 +1,5 @@
 """
-main.py — FastAPI application entry point.
+main.py - FastAPI application entry point.
 """
 
 import json
@@ -145,41 +145,49 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
             print(f"[WebSocket] [{session_id}] User: {user_input}")
 
             graph_input = {
-                "session_id":           session_id,
-                "customer_name":        session.get("customer_name", "Customer"),
-                "messages":             session.get("messages", []),
-                "current_input":        user_input,
-                "attempt_count":        session.get("attempt_count", 0),
-                "intent":               "",
-                "entities":             {},
-                "retrieved_docs":       [],
-                "kb_answer":            "",
-                "kb_confidence":        0.0,
-                "kb_sources":           [],
-                "sentiment":            "neutral",
-                "sentiment_score":      0.0,
-                "frustration_turns":    session.get("frustration_turns", 0),
-                "action_result":        {},
-                "action_taken":         "",
-                "should_escalate":      False,
-                "escalation_reason":    "",
-                "escalation_ticket_id": "",
-                "resolution_logged":    False,
-                "response":             "",
+                "session_id":              session_id,
+                "customer_name":           session.get("customer_name", "Customer"),
+                "messages":                session.get("messages", []),
+                "current_input":           user_input,
+                "attempt_count":           session.get("attempt_count", 0),
+                "intent":                  "",
+                "entities":                {},
+                "retrieved_docs":          [],
+                "kb_answer":               "",
+                "kb_confidence":           0.0,
+                "kb_sources":              [],
+                "sentiment":               "neutral",
+                "sentiment_score":         0.0,
+                "frustration_turns":       session.get("frustration_turns", 0),
+                "action_result":           {},
+                "action_taken":            "",
+                "resolution_level":        session.get("resolution_level", 1),
+                "clarification_asked":     session.get("clarification_asked", False),
+                "alternatives_suggested":  session.get("alternatives_suggested", False),
+                "escalate_requested_count": session.get("escalate_requested_count", 0),
+                "should_escalate":         False,
+                "escalation_reason":       "",
+                "escalation_ticket_id":    "",
+                "resolution_logged":       False,
+                "response":                "",
             }
 
             result = graph.invoke(graph_input)
 
             update_session(session_id, {
-                "messages":          result.get("messages", []),
-                "frustration_turns": result.get("frustration_turns", 0),
+                "messages":               result.get("messages", []),
+                "frustration_turns":      result.get("frustration_turns", 0),
+                "resolution_level":       result.get("resolution_level", 1),
+                "clarification_asked":    result.get("clarification_asked", False),
+                "alternatives_suggested":   result.get("alternatives_suggested", False),
+                "escalate_requested_count": result.get("escalate_requested_count", 0),
                 "attempt_count": (
                     session.get("attempt_count", 0) + 1
                     if not result.get("response") else 0
                 ),
             })
 
-            raw_sources     = result.get("kb_sources", [])
+            raw_sources      = result.get("kb_sources", [])
             friendly_sources = [
                 s.replace(".md", "").replace("_", " ").title()
                 for s in raw_sources
@@ -192,6 +200,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                 "sentiment_score":      result.get("sentiment_score", 0.0),
                 "kb_confidence":        result.get("kb_confidence", 0.0),
                 "kb_sources":           friendly_sources,
+                "resolution_level":     result.get("resolution_level", 1),
                 "is_escalated":         result.get("should_escalate", False),
                 "escalation_reason":    result.get("escalation_reason", ""),
                 "escalation_ticket_id": result.get("escalation_ticket_id", ""),
@@ -199,7 +208,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
             }
 
             await websocket.send_text(json.dumps(response_payload))
-            print(f"[WebSocket] [{session_id}] Agent responded.")
+            print(f"[WebSocket] [{session_id}] Level: {result.get('resolution_level', 1)} | Action: {result.get('action_taken', 'none')}")
 
     except WebSocketDisconnect:
         print(f"[WebSocket] Disconnected: {session_id}")
